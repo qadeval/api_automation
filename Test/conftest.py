@@ -1,6 +1,5 @@
 import base64
 import json
-import os
 
 import pytest
 import requests
@@ -10,37 +9,38 @@ def pytest_addoption(parser):
     parser.addoption(
         "--xray-client-id",
         action="store",
-        default=os.environ.get("XRAY_CLIENT_ID", ""),
+        default="8FDF6ABBBC11424083A39B7538FFE6DE",
         help="Xray client ID",
     )
     parser.addoption(
         "--xray-client-secret",
         action="store",
-        default=os.environ.get("XRAY_CLIENT_SECRET", ""),
+        default="d8a6a4043dcbed5a24a8a538fc911e8d724ca0d9c4d6fe701b918ac8b4f9fc41",
         help="Xray client secret",
     )
     parser.addoption(
         "--xray-base-url",
         action="store",
-        default=os.environ.get("XRAY_BASE_URL", ""),
+        default="https://xray.cloud.getxray.app",
         help="Xray base URL",
     )
     parser.addoption(
         "--jira-username",
         action="store",
-        default=os.environ.get("JIRA_USERNAME", ""),
+        default = "devalth8@gmail.com",
+        # default=                           os.environ.get("JIRA_USERNAME", ""),
         help="Jira username",
     )
     parser.addoption(
         "--jira-password",
         action="store",
-        default=os.environ.get("JIRA_PASSWORD", ""),
+        default='ATATT3xFfGF0XIEet5A85uJfOoI6dHKBpqy5cSLoN4QHQmtIJTGzlYsEsqdFL9A1wg9E3ObwmpbfZlGysYgE0lBj1zF7x1nJfmhO90q5QUOdNMn4H7qpnTJiXbw1sUaPHhf0eSBgpgthFSlcUUdrJGhnHM6V44zLeQPQdxdFRmlBuodVP7aNFjU=3F6ADBB1',
         help="Jira password",
     )
     parser.addoption(
         "--jira-base-url",
         action="store",
-        default=os.environ.get("JIRA_BASE_URL", ""),
+        default='https://devalth8.atlassian.net/',
         help="Jira base URL",
     )
 
