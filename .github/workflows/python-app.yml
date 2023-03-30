@@ -1,0 +1,23 @@
+name: Run tests
+run: |
+    pytest
+    # or
+    # npm test
+
+-name: Update Jira test results
+  env:
+    JIRA_URL: ${{ secrets.JIRA_URL }}
+    JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+    JIRA_PASSWORD: ${{ secrets.JIRA_PASSWORD }}
+    XRAY_PROJECT_KEY: REAL
+  run: |
+    pip install xray-python
+    xray = Xray(JIRA_URL, auth=(JIRA_USERNAME, JIRA_PASSWORD))
+    for test_report in parse_test_results():
+      for test_result in test_report:
+        test_key = test_result['test_key']
+        test_status = 'PASS' if test_result['status'] == 'passed' else 'FAIL'
+        xray.add_test_execution(
+          XRAY_PROJECT_KEY, test_key, test_status,
+          start=test_result['start_time'], finish=test_result['end_time']
+        )
