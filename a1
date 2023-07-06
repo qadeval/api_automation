@@ -1,0 +1,57 @@
+{
+  "s3_config_path": "s3://lly-edp-codeconfig-us-east-2-dev/edb_api_ingestion/config/",
+  "payload_filename": "payload_generated_API_Ingestion.json",
+  "JIRA_Secret_Name": "awsedb-edp-jira-secret",
+  "Powerbi_token_credential":"Edp-PowerBi-Token-credential",
+  "dev_execution_key": "EDP-13128",
+  "test_case_config_path":"s3://lly-edp-codeconfig-us-east-2-dev/edb_test_automation/edb_test_case_input_config_creator/testcase_config.json",
+  "master_config_path": "s3://lly-edp-codeconfig-us-east-2-dev/edb_test_automation/edb_test_case_input_config_creator/master_config_api_Ingestion.json",
+  "execution": {
+    "project_name": "EDP",
+    "labels": [ "automation_testing", "edp_team1"],
+    "priority": "Highest",
+    "fixVersions": "Q3 - 21 - Release 1",
+    "affectedVersion": "Q2 -21 - Release1",
+    "components": "API Ingest",
+    "assignee": "63ec82eceaf0b28dfd1b40ae",
+    "epic":"EDP-12071",
+    "test_plan":[
+      {
+        "test_plan_id": "EDP-12675",
+        "summary": "EDB | Dummy | Test Execution vera check",
+
+        "status": [
+          "FAILED",
+          "TO DO" ,
+          "PASSED"
+        ]
+      }
+    ]
+  },
+  "testcases": [
+    {
+      "test_case_id": "EDP-12676",
+      "config_data": {}
+
+    }
+
+   
+    
+    
+
+
+
+
+
+    
+  
+
+
+
+
+    
+    
+
+   
+  ]
+}
