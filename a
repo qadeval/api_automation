@@ -1,0 +1,267 @@
+'''Generic code To create the test execution'''
+
+import base64
+import json
+import os
+from pathlib import Path
+import test.utilities.jira_utility as jira_utility
+import pytest
+from loguru import logger
+
+CONFIG = ""
+TEST_EXECUTION_KEY = ""
+
+ENV = 'qa'
+# ENV = os.environ.get("ENVIRONMENT", "").lower()
+if ENV == "dev":
+    CONFIG = "test/config/test_config/dev/testcase_config.json"
+elif ENV == "qa":
+    CONFIG = "test/config/test_config/qa/testcase_config.json"
+
+@pytest.fixture(scope='session')
+def testcase_data():
+    """
+    This function creates Test execution for the testcases
+    """
+    test_case_dict = {}
+    # validate file available
+    with open(CONFIG, encoding='UTF-8') as file:
+        config = json.load(file)
+    devexec_key = config.get('dev_execution_key')
+    devexec_tclist = []
+    test_plan = config.get('execution').get('test_plan')
+    jira_dict_headers, xray_dict_headers, xray_client = jira_utility.generate_auth()
+    # for element in test_plan:
+    #     test_plan_id=element.get('test_plan_id')
+    # test_plan_issueid = jira_utility.get_issueid(test_plan_id, jira_dict_headers)
+    #need to update execution meta data
+    testexec_metadata = jira_utility.map_execution_metadata(config.get('execution'))
+    config_tc_list = config.get('testcases')
+    for element in test_plan:
+        test_plan_list = []
+        test_plan_list.append(element.get('test_plan_id'))
+        #testexec_metadata['fields']['customfield_10628'] = test_plan_list
+        testexec_metadata['fields']['summary'] = element.get('summary')
+        # Get test cases status
+        test_case_status = element.get('status')
+        # Get test case list
+        config_tc_list = element.get('tc_list')
+        test_plan_id = element.get('test_plan_id')
+        test_plan_issueid = jira_utility.get_issueid(test_plan_id, jira_dict_headers)
+        testdata = jira_utility.get_testcases_list(test_plan_issueid, xray_client)
+        # tc_issueid_key_status_list = jira_utility.get_testcases_list(test_plan_issueid, )
+        # '''if status is given'''
+        if 'TO DO' in test_case_status and len(test_case_status) >= 1:
+            tc_list = []
+            tc_list_issueid = []
+            for item in testdata:
+                latest_status = item.get('latestStatus')
+                if 'TO DO' in latest_status:
+                    key = item.get('key')
+                    key_issueid = jira_utility.get_issueid(key, jira_dict_headers)
+                    tc_list.append(key)
+                    tc_list_issueid.append(key_issueid)
+            #logger.info(tc_list, tc_list_issueid)
+            if ENV == 'qa':
+                # Check if test execution exists
+                test_plan_issueid = jira_utility.get_issueid(test_plan_id, jira_dict_headers)
+                test_execution_list = jira_utility.get_testexec_list(test_plan_issueid, xray_client)
+                logger.info("ALL TEST EXECUTION IN THE TEST PLAN")
+                logger.info(test_execution_list)
+                if not test_execution_list:
+                    logger.info('Test execution not present in the test plan')
+                    # Create New Test Execution
+                    exec_response = jira_utility.create_test_exec(testexec_metadata, jira_dict_headers)
+                    exec_issueid = jira_utility.get_issueid(exec_response.get('key'), jira_dict_headers)
+                    test_exec_issueid_list=[]
+                    test_exec_issueid_list.append(exec_issueid)
+                    logger.info(test_exec_issueid_list)
+                    jira_utility.attach_textexecution_to_testplan(test_plan_issueid,test_exec_issueid_list, xray_client)
+                    jira_utility.attach_tc_to_testexec(
+                        exec_issueid, tc_list_issueid, xray_client)
+                    execution_key = exec_response['key']
+                    test_case_dict[execution_key] = tc_list
+                else:
+                    # Find latest test Execution
+                    logger.info('Test execution present in the test plan')
+                    old_exec_key = jira_utility.find_latest_testexec(test_execution_list, jira_dict_headers)
+                    logger.info("LATEST EXECUTION ID:" + old_exec_key)
+                    old_exec_issueid = jira_utility.get_issueid(old_exec_key, jira_dict_headers)
+                    jira_utility.attach_tc_to_testexec(old_exec_issueid, tc_list_issueid, xray_client)
+                    test_case_dict[old_exec_key] = tc_list
+            elif ENV == 'dev':
+                dev_test_exec_issueid = jira_utility.get_issueid(devexec_key, jira_dict_headers)
+                jira_utility.attach_tc_to_testexec(
+                    dev_test_exec_issueid, tc_list_issueid, xray_client)
+                devexec_tclist += tc_list
+                test_case_dict[devexec_key] = devexec_tclist
+        if 'FAILED' in test_case_status:
+            tc_list_pf = []
+            tc_list_issueid_pf = []
+            for item in testdata:
+                latest_status = item.get('latestStatus')
+                logger.info(f'n- 103 {latest_status}')
+                if latest_status == "FAILED":
+                    tc_list_pf.append(item.get('key'))
+                    key_issueid = jira_utility.get_issueid(item.get('key'), jira_dict_headers)
+                    logger.info(f'n -107{key_issueid}')
+                    tc_list_issueid_pf.append(key_issueid)
+            logger.info('Test cases to add to test execution payload ')
+            #logger.info(tc_list, tc_list_issueid)
+            # if tc_list_pf is empty exit condition
+            if ENV == 'dev':
+                dev_test_exec_issueid = jira_utility.get_issueid(devexec_key, jira_dict_headers)
+                jira_utility.attach_tc_to_testexec(dev_test_exec_issueid, tc_list_issueid_pf, xray_client)
+                devexec_tclist += tc_list_pf
+                test_case_dict[devexec_key] = devexec_tclist
+            elif ENV == 'qa' and tc_list_pf:
+                # '''Create New Test Execution''' - to be updated
+                logger.info("creating new test Execution as the test case failed and  env is qa")
+                response_exec = jira_utility.create_test_exec(testexec_metadata, jira_dict_headers)
+                logger.info(f'n-121 {response_exec}')
+                # '''Attach test cases to test execution'''
+                exec_issueid = jira_utility.get_issueid(response_exec.get('key'), jira_dict_headers)
+                logger.info(f'no -124 {exec_issueid}')
+                test_exec_issueid_list=[]
+                test_exec_issueid_list.append(exec_issueid)
+                logger.info(f'No- 127{test_exec_issueid_list}')
+                jira_utility.attach_textexecution_to_testplan(test_plan_issueid,test_exec_issueid_list, xray_client)
+                jira_utility.attach_tc_to_testexec(exec_issueid, tc_list_issueid_pf, xray_client)
+                execution_key = response_exec['key']
+                logger.info(f'no -131 = {execution_key}')
+                test_case_dict[execution_key] = tc_list_pf
+        if 'EXECUTING' in test_case_status:
+            tc_list_pf = []
+            tc_list_issueid_pf = []
+            for item in testdata:
+                latest_status = item.get('latestStatus')
+                if latest_status == "EXECUTING":
+                    tc_list_pf.append(item.get('key'))
+                    key_issueid = jira_utility.get_issueid(item.get('key'), jira_dict_headers)
+                    tc_list_issueid_pf.append(key_issueid)
+            logger.info('Test cases to add to test execution payload ')
+            #logger.info(tc_list, tc_list_issueid)
+            # if tc_list_pf is empty exit condition
+            if ENV == 'dev':
+                dev_test_exec_issueid = jira_utility.get_issueid(devexec_key, jira_dict_headers)
+                jira_utility.attach_tc_to_testexec(dev_test_exec_issueid, tc_list_issueid_pf, xray_client)
+                devexec_tclist += tc_list_pf
+                test_case_dict[devexec_key] = devexec_tclist
+            elif ENV == 'qa' and tc_list_pf:
+                # '''Create New Test Execution''' - to be updated
+                response_exec = jira_utility.create_test_exec(testexec_metadata, jira_dict_headers)
+                # '''Attach test cases to test execution'''
+                exec_issueid = jira_utility.get_issueid(response_exec.get('key'), jira_dict_headers)
+                test_exec_issueid_list=[]
+                test_exec_issueid_list.append(exec_issueid)
+                logger.info(test_exec_issueid_list)
+                jira_utility.attach_textexecution_to_testplan(test_plan_issueid,test_exec_issueid_list, xray_client)
+                jira_utility.attach_tc_to_testexec(exec_issueid, tc_list_issueid_pf, xray_client)
+                execution_key = response_exec['key']
+                test_case_dict[execution_key] = tc_list_pf        
+
+        if 'PASSED' in test_case_status:
+            test_execution_payload = {}
+            tc_list_pf = []
+            tc_list_issueid_pf = []
+            for item in testdata:
+                latest_status = item.get('latestStatus')
+                if latest_status == "PASSED":
+                    tc_list_pf.append(item.get('key'))
+                    key_issueid = jira_utility.get_issueid(item.get('key'), jira_dict_headers)
+                    tc_list_issueid_pf.append(key_issueid)
+            logger.info('Test cases to add to test execution payload ')
+            #logger.info(tc_list, tc_list_issueid)
+            if ENV == 'dev':
+                dev_test_exec_issueid = jira_utility.get_issueid(devexec_key, jira_dict_headers)
+                jira_utility.attach_tc_to_testexec(dev_test_exec_issueid, tc_list_issueid_pf, xray_client)
+                devexec_tclist += tc_list_pf
+                test_case_dict[devexec_key] = devexec_tclist
+            elif ENV == 'qa' and tc_list_pf: 
+                # '''Create New Test Execution'''
+                response_exec = jira_utility.create_test_exec(testexec_metadata,jira_dict_headers)
+                # '''Attach test cases to test execution'''
+                exec_issueid = jira_utility.get_issueid(response_exec.get('key'), jira_dict_headers)
+                test_exec_issueid_list=[]
+                test_exec_issueid_list.append(exec_issueid)
+                logger.info(test_exec_issueid_list)
+                jira_utility.attach_textexecution_to_testplan(test_plan_issueid,test_exec_issueid_list, xray_client)
+                jira_utility.attach_tc_to_testexec(exec_issueid, tc_list_issueid_pf, xray_client)
+                execution_key = response_exec['key']
+                test_case_dict[execution_key] = tc_list_pf
+    yield test_case_dict, xray_dict_headers, jira_dict_headers,xray_client
+    for key in test_case_dict.keys():
+        jira_utility.route_test_execution_for_approval(key, jira_dict_headers)
+
+
+
+@pytest.fixture(scope='function')
+
+def test_case_key():
+    return None
+
+
+@pytest.fixture(autouse=True)
+def write_logs(request, testcase_data):
+    # put logs in tests/logs
+    log_path = Path("tests") / "logs"
+
+    # tidy logs in subdirectories based on test module and class names
+    module = request.module
+    class_ = request.cls
+    name = request.node.name + ".log"
+
+    if module:
+        log_path /= module.__name__.replace("tests.", "")
+    if class_:
+        log_path /= class_.__name__
+
+    log_path.mkdir(parents=True, exist_ok=True)
+
+    # append last part of the name
+    log_path /= name
+
+    # enable the logger
+    logger.remove()
+    logger.configure(handlers=[{"sink": log_path, "level": "TRACE", "mode": "w"}])
+    # logger.basicConfig(filename=name, level=logging.INFO)
+    logger.info(":::::::::::::::::::::::::::::::::::::::::")
+    logger.info("Test Execution Started: " + request.node.name)
+    logger.enable("my_package")
+
+    test_case_key = []
+    yield test_case_key
+    logger.info("testcasekey")
+    logger.info(test_case_key)
+    # find test execution key
+    # logger.info(testcase_data)
+    flag=False
+    test_case_dict, xray_dict_headers, jira_dict_headers, xray_client = testcase_data
+    for element in test_case_key:
+        for key in test_case_dict.keys():
+            value = test_case_dict.get(key)
+            logger.info(value)
+            if element in value:
+                #logger.info("Test Case present in current Test Execution")
+                flag = True
+                logger.info(f"Test case {element} found in current Test Execution")
+                #TEST_EXECUTION_KEY = key
+                break;
+        if flag==1:
+            logger.info("Test Case present in current Test Execution")
+            TEST_EXECUTION_KEY = key
+        else:
+            logger.error("Test case not present in current Test Execution and attaching logs")
+
+    logger.info("Test Execution Completed: " + request.node.name)
+    logger.info(":::::::::::::::::::::::::::::::::::::::::")
+    file = "tests/logs/" + module.__name__ + "/" + name
+    data = open(file, 'r').read()
+    
+
+    attachment_data = {"data": base64.b64encode(data.encode('ascii')).decode(), "filename": name, "mimeType": "text/plain"}
+
+
+    test_run_id = jira_utility.get_test_execution_runid(key, test_case_key[0], \
+            jira_dict_headers, xray_client)
+    jira_utility.add_attachment(test_run_id, attachment_data, xray_client)
